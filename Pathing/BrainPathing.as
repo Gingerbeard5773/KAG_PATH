@@ -214,6 +214,8 @@ class PathHandler
 			{
 				HighLevelNode@ neighbor = currentNode.connections[i];
 				if (closedList.exists(neighbor.original_position.toString())) continue;
+				
+				if (!neighbor.hasFlag(flags)) continue;
 
 				if ((neighbor.position - startNode.position).Length() > maximum_pathing_distance_high_level) continue;
 

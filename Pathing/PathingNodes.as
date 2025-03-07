@@ -119,16 +119,12 @@ void InitializeNodeMap(CRules@ this)
 void UpdateNodeConnections(HighLevelNode@ node, CMap@ map)
 {
 	node.connections = node.original_connections;
-	
-	const bool aerial = node.hasFlag(Path::AERIAL);
 
 	for (int i = node.connections.length - 1; i >= 0; i--)
 	{
 		HighLevelNode@ neighbor = node.connections[i];
-		const bool aerial2 = neighbor.hasFlag(Path::AERIAL);
-		const bool air = (!aerial2 && aerial) || (aerial2 && !aerial);
 
-		if (neighbor.hasFlag(Path::DISABLED) || air || !canNodesConnect(node.position, neighbor.position, map))
+		if (neighbor.hasFlag(Path::DISABLED) || !canNodesConnect(node.position, neighbor.position, map))
 		{
 			node.connections.erase(i);
 
