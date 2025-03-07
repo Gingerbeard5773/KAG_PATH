@@ -581,8 +581,8 @@ void SetSuggestedKeys(CBlob@ this, const bool&in aerial = false)
 	{
 		CMap@ map = getMap();
 		const f32 radius = this.getRadius();
-		const bool right = map.isTileSolid(Vec2f(position.x + radius + tilesize, position.y));
-		const bool left  = map.isTileSolid(Vec2f(position.x - radius - tilesize, position.y));
+		const bool right = map.isTileSolid(Vec2f(position.x + radius + tilesize, position.y - 2));
+		const bool left  = map.isTileSolid(Vec2f(position.x - radius - tilesize, position.y - 2));
 		
 		if (right && left)
 		{
