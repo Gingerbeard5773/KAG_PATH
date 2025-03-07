@@ -36,9 +36,9 @@ void onTick(CBrain@ this)
 
 
 	CBlob@ target = this.getTarget();
-	if (target is null || (getGameTime() + blob.getNetworkID() * 10) % 90 == 0)
+	if (target is null || XORRandom(20) == 0)
 	{
-		@target = getNewTarget(this, blob, true, true);
+		@target = getNewTarget(blob);
 		this.SetTarget(target);
 	}
 
@@ -124,10 +124,7 @@ void AttackBlob(CBlob@ blob, CBlob @target)
 
 	if (targetDistance > blob.getRadius() + 15.0f)
 	{
-		if (!isFriendAheadOfMe(blob, target))
-		{
-			Chase(blob, target);
-		}
+		Chase(blob, target);
 	}
 
 	JumpOverObstacles(blob);
@@ -192,6 +189,28 @@ void AttackBlob(CBlob@ blob, CBlob @target)
 	}
 }
 
+CBlob@ getNewTarget(CBlob@ blob)
+{
+	CBlob@[] players;
+	getBlobsByTag("player", @players);
+
+	CBlob@ closest = null;
+	f32 closestDist = 600.0f;
+	for (uint i = 0; i < players.length; i++)
+	{
+		CBlob@ potential = players[i];
+		if (blob.getTeamNum() == potential.getTeamNum()) continue;
+		if (potential.hasTag("dead") || potential.hasTag("migrant")) continue;
+		
+		const f32 dist = (potential.getPosition() - blob.getPosition()).Length();
+		if (dist < closestDist)
+		{
+			@closest = potential;
+			closestDist = dist;
+		}
+	}
+	return closest;
+}
 
 /// PATHING DEBUG
 
