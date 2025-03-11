@@ -124,7 +124,7 @@ void UpdateNodeConnections(HighLevelNode@ node, CMap@ map)
 	{
 		HighLevelNode@ neighbor = node.connections[i];
 
-		if (neighbor.hasFlag(Path::DISABLED) || !canNodesConnect(node.position, neighbor.position, map))
+		if (neighbor.hasFlag(Path::DISABLED) || !canNodesConnect(node, neighbor, map))
 		{
 			node.connections.erase(i);
 
@@ -229,9 +229,12 @@ bool isInMap(Vec2f&in tilePos, Vec2f&in dim)
 	return tilePos.x > 0 && tilePos.y > 0 && tilePos.x < dim.x && tilePos.y < dim.y;
 }
 
-bool canNodesConnect(Vec2f start, Vec2f end, CMap@ map)
+bool canNodesConnect(HighLevelNode@ node, HighLevelNode@ neighbor, CMap@ map)
 {
-	if ((start - end).Length() > node_distance * 1.7f) return false;
+	Vec2f start = node.position;
+	Vec2f end = neighbor.position;
+	const bool air = node.hasFlag(Path::AERIAL) || neighbor.hasFlag(Path::AERIAL);
+	if ((start - end).Length() > node_distance * 1.7f && !air) return false;
 
 	if (!isWalkable(start, map)) return false;
 
