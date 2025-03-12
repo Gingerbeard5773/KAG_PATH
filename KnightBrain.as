@@ -15,6 +15,8 @@
 void onInit(CBrain@ this)
 {
 	InitBrain(this);
+	
+	this.server_SetActive(true);
 
 	CBlob@ blob = this.getBlob();
 	PathHandler handler(blob.getTeamNum(), Path::GROUND);
@@ -28,6 +30,12 @@ void onTick(CBrain@ this)
 
 	PathHandler@ handler;
 	if (!blob.get("path_handler", @handler)) return;
+	if (blob.getPlayer() !is null)
+	{
+		handler.EndPath();
+		this.server_SetActive(false);
+		return;
+	}
 
 	handler.Tick(blob.getPosition());
 
