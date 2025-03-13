@@ -21,7 +21,7 @@
 const u32 stuck_time = 30 * 3; // Time it takes to shut off a specific waypoint if the bot cannot pass fast enough
 
 const f32 maximum_pathing_distance_high_level = tilesize * 70;
-const f32 maximum_pathing_distance_low_level = tilesize * 28;
+const f32 maximum_pathing_distance_low_level = tilesize * 15;
 
 class PathHandler
 {
