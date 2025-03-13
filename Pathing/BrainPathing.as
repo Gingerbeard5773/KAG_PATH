@@ -2,6 +2,7 @@
 // A* Pathfinding Implementation for King Arthur's Gold
 
 #include "PathingNodesCommon.as";
+#include "RunnerCommon.as";
 
 /*
  High-level pathing ensures efficient, large-scale navigation across the map.
@@ -84,6 +85,7 @@ class PathHandler
 		{
 			// Remove waypoints that we have reached
 			waypoints.removeAt(0);
+			path.clear();
 			if (waypoints.length > 0)
 			{
 				SetLowLevelPath(position, waypoints[0]);
@@ -553,7 +555,7 @@ void SetSuggestedFacing(CBlob@ this)
 	}
 }
 
-void SetSuggestedKeys(CBlob@ this, const bool&in aerial = false)
+void SetSuggestedKeys(CBlob@ this)
 {
 	PathHandler@ handler;
 	if (!this.get("path_handler", @handler)) return;
@@ -567,40 +569,87 @@ void SetSuggestedKeys(CBlob@ this, const bool&in aerial = false)
 		return;
 	}
 
+	CMap@ map = getMap();
 	Vec2f position = this.getPosition();
-	Vec2f distance = (aerial && handler.waypoints.length > 0 ? handler.waypoints[0] : handler.path[0]) - position;
+	Vec2f distance = handler.path[0] - position;
 	Vec2f direction = distance;
 	direction.Normalize();
 
 	if (Maths::Abs(distance.y) > 2.0f)
 	{
-		this.setKeyPressed(aerial ? key_action1 : key_up, direction.y < -0.5f);
+		this.setKeyPressed(key_up, direction.y < -0.5f);
 	}
 	
-	this.setKeyPressed(aerial ? key_action2 : key_down, direction.y > 0.5f);
+	this.setKeyPressed(key_down, direction.y > 0.5f);
+	
+	if (WallJump(this, map, handler, direction, distance)) return;
 
-	if (direction.y < - 0.5f && Maths::Abs(distance.x) < 4.0f && !this.isOnLadder())
-	{
-		CMap@ map = getMap();
-		const f32 radius = this.getRadius();
-		const bool right = map.isTileSolid(Vec2f(position.x + radius + tilesize, position.y - 2));
-		const bool left  = map.isTileSolid(Vec2f(position.x - radius - tilesize, position.y - 2));
-		
-		if (right && left)
-		{
-			const bool pressed_right = this.isKeyPressed(key_right);
-			this.setKeyPressed(key_left, pressed_right);
-			this.setKeyPressed(key_right, !pressed_right);
-			return;
-		}
-		else if (right || left)
-		{
-			this.setKeyPressed(key_left, left);
-			this.setKeyPressed(key_right, right);
-			return;
-		}
-	}
-	
+	if (ClimbWall(this, map, handler, direction, distance)) return;
+
 	this.setKeyPressed(key_left, direction.x < -0.5f);
 	this.setKeyPressed(key_right, direction.x > 0.5f);
+}
+
+bool WallJump(CBlob@ this, CMap@ map, PathHandler@ handler, Vec2f&in direction, Vec2f&in distance)
+{
+	if (direction.y < -0.5f)
+	{
+		if (handler.path.length <= 1) return false;
+
+		Vec2f path_direction = handler.path[0] - handler.path[1];
+		path_direction.Normalize();
+
+		if (path_direction != Vec2f(0, 1)) return false;
+	}
+	
+	if (this.isOnLadder() || this.isInWater()) return false;
+
+	RunnerMoveVars@ moveVars;
+	if (!this.get("moveVars", @moveVars)) return false;
+	
+	if (moveVars.walljumped_side <= 0) return false;
+
+	const bool left = moveVars.walljumped_side == 1 || moveVars.walljumped_side == 2;
+	const bool right = moveVars.walljumped_side == 3 || moveVars.walljumped_side == 4;
+	const int sign = left ? 1 : -1;
+	Vec2f end = handler.path[0] + Vec2f(tilesize * 6 * sign, 0);
+
+	// Find the next wall to jump off of
+	if (map.rayCastSolid(handler.path[0], end))
+	{
+		this.setKeyPressed(key_up, true);
+		this.setKeyPressed(key_down, false);
+		this.setKeyPressed(key_right, left);
+		this.setKeyPressed(key_left, right);
+		
+		if (handler.path[0].y > this.getPosition().y)
+		{
+			handler.path.erase(0);
+		}
+
+		return true;
+	}
+	
+	return false;
+}
+
+bool ClimbWall(CBlob@ this, CMap@ map, PathHandler@ handler, Vec2f&in direction, Vec2f&in distance)
+{
+	if (direction.y < - 0.5f && Maths::Abs(distance.x) < 4.0f && !this.isOnLadder())
+	{
+		Vec2f position = this.getPosition();
+		const f32 radius = this.getRadius();
+		const bool right = map.isTileSolid(Vec2f(position.x + radius + tilesize, position.y - halfsize)) ||
+		                   map.isTileSolid(Vec2f(position.x + radius + tilesize, position.y + halfsize));
+		const bool left  = map.isTileSolid(Vec2f(position.x - radius - tilesize, position.y - halfsize)) ||
+		                   map.isTileSolid(Vec2f(position.x - radius - tilesize, position.y + halfsize));
+		if (right || left)
+		{
+			// Move towards the adjacent wall
+			this.setKeyPressed(key_left, left);
+			this.setKeyPressed(key_right, right);
+			return true;
+		}
+	}
+	return false;
 }

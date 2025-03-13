@@ -42,7 +42,6 @@ void onTick(CBrain@ this)
 	SetSuggestedKeys(blob);
 	SetSuggestedFacing(blob);
 
-
 	CBlob@ target = this.getTarget();
 	if (target is null || XORRandom(20) == 0)
 	{
@@ -52,11 +51,8 @@ void onTick(CBrain@ this)
 
 	u8 strategy = blob.get_u8("strategy");
 
-	this.getCurrentScript().tickFrequency = 29;
 	if (target !is null)
 	{
-		this.getCurrentScript().tickFrequency = 1;
-
 		f32 distance;
 		const bool visibleTarget = isVisible(blob, target, distance);
 		if (visibleTarget && distance < 50.0f)
@@ -68,7 +64,7 @@ void onTick(CBrain@ this)
 		{
 			strategy = Strategy::chasing;
 		}
-		else if (strategy == Strategy::chasing && (getGameTime() + blob.getNetworkID() * 10) % 30 == 0)
+		else if (strategy == Strategy::chasing && (getGameTime() + blob.getNetworkID() * 10) % 20 == 0)
 		{
 			SetPath(blob, target.getPosition());
 		}
@@ -109,10 +105,10 @@ void onTick(CBrain@ this)
 			Vec2f dim = map.getMapDimensions();
 			SetPath(blob, Vec2f(XORRandom(dim.x), XORRandom(dim.y)));
 		}
-		else
+		/*else if ((getGameTime() + blob.getNetworkID() * 10) % 30 == 0)
 		{
-			this.getCurrentScript().tickFrequency = 1;
-		}
+			handler.Repath(blob.getPosition());
+		}*/
 	}
 
 	if (handler.destination == Vec2f_zero)
@@ -236,7 +232,7 @@ void onRender(CSprite@ this)
 	Driver@ driver = getDriver();
 	
 	// Draw low-level boundary
-	//GUI::DrawCircle(blob.getScreenPos(), tilesize * 28 * 2 * getCamera().targetDistance, col);
+	//GUI::DrawCircle(blob.getScreenPos(), tilesize * 15 * 2 * getCamera().targetDistance, col);
 	
 	// Draw high-level boundary
 	//GUI::DrawCircle(blob.getScreenPos(), tilesize * 70 * 2 * getCamera().targetDistance, ConsoleColour::ERROR);
