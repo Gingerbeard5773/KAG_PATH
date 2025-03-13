@@ -8,8 +8,6 @@
 // Gingerbeard @ March 6th, 2025
 
 // here is an example of a pathing implementation for a bot
-// since i didnt spend a lot of time, these bots are still pretty dumb, but they are able to path around
-// parkour has not been implemented and so they get stuck in holes etc
 
 
 void onInit(CBrain@ this)
@@ -25,12 +23,12 @@ void onInit(CBrain@ this)
 
 void onTick(CBrain@ this)
 {
-
 	CBlob@ blob = this.getBlob();
 
 	PathHandler@ handler;
 	if (!blob.get("path_handler", @handler)) return;
-	if (blob.getPlayer() !is null)
+
+	if (blob.getPlayer() !is null && !blob.isBot())
 	{
 		handler.EndPath();
 		this.server_SetActive(false);
