@@ -439,7 +439,9 @@ class PathHandler
 					}
 					continue;
 				}
-				
+				const string name = b.getName();
+				if (name == "lantern" || name == "bridge") return true;
+
 				if (b.isPlatform()) // Platforms can only be pathed through if we arent going against it
 				{
 					ShapePlatformDirection@ plat = shape.getPlatformDirection(0);
@@ -452,7 +454,7 @@ class PathHandler
 					continue;
 				}
 				
-				return b.getName() == "lantern"; // Other static blobs like half-block or triangle tiles cant be passed
+				return false; // Other static blobs like mechanisms
 			}
 		}
 
