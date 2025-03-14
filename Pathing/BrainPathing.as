@@ -15,7 +15,6 @@
 
 /*
   TODO:
-  - Add parkour to pathing/movement
   - Allow for high level node connections to incorporate blob obstructions (so bots dont try and path through doors etc)
  */
 
@@ -83,20 +82,31 @@ class PathHandler
 
 		while (waypoints.length > 0 && (waypoints[0] - position).Length() < reach_high_level)
 		{
-			// Remove waypoints that we have reached
-			waypoints.removeAt(0);
-			path.clear();
-			if (waypoints.length > 0)
-			{
-				SetLowLevelPath(position, waypoints[0]);
+			ProgressPath(position);
+		}
+	}
+	
+	void ProgressPath(Vec2f&in position)
+	{
+		// Remove waypoints that we have reached
+		string waypoint_key = waypoints[0].toString();
+		if (cached_waypoints.exists(waypoint_key))
+		{
+			cached_waypoints.delete(waypoint_key);
+		}
 
-				// Cache the next waypoint as a potential 'stuck' node
-				const string waypoint_key = waypoints[0].toString();
-				if (!cached_waypoints.exists(waypoint_key))
-				{
-					CachedWaypoint@ cached = CachedWaypoint(waypoints[0]);
-					cached_waypoints.set(waypoint_key, cached);
-				}
+		waypoints.removeAt(0);
+		path.clear();
+		if (waypoints.length > 0)
+		{
+			SetLowLevelPath(position, waypoints[0]);
+
+			// Cache the next waypoint as a potential 'stuck' node
+			waypoint_key = waypoints[0].toString();
+			if (!cached_waypoints.exists(waypoint_key))
+			{
+				CachedWaypoint@ cached = CachedWaypoint(waypoints[0]);
+				cached_waypoints.set(waypoint_key, cached);
 			}
 		}
 	}
@@ -221,8 +231,9 @@ class PathHandler
 
 				if ((neighbor.position - startNode.position).Length() > maximum_pathing_distance_high_level) continue;
 
-				const f32 underwaterPenalty = isUnderwater(currentNode.position) ? 40 : 0;
-				const f32 tentativeGCost = currentNode.gCost + underwaterPenalty + euclidean(currentNode.position, neighbor.position);
+				const f32 underwaterPenalty = isUnderwater(currentNode.position) ? 60 : 0;
+				const f32 groundPenalty = isGrounded(neighbor.position) ? 0 : 40;
+				const f32 tentativeGCost = currentNode.gCost + underwaterPenalty + + groundPenalty + euclidean(currentNode.position, neighbor.position);
 
 				// Check if the neighbor is not in the open list or if a better path is found
 				const bool isEvaluated = isInOpenList(neighbor, openList);
@@ -565,8 +576,12 @@ void SetSuggestedKeys(CBlob@ this)
 		if (handler.waypoints.length == 0)
 		{
 			EndPath(this);
+			return;
 		}
-		return;
+		else
+		{
+			handler.path.push_back(handler.waypoints[0]);
+		}
 	}
 
 	CMap@ map = getMap();
@@ -575,16 +590,14 @@ void SetSuggestedKeys(CBlob@ this)
 	Vec2f direction = distance;
 	direction.Normalize();
 
-	if (Maths::Abs(distance.y) > 2.0f)
-	{
-		this.setKeyPressed(key_up, direction.y < -0.5f);
-	}
-	
+	this.setKeyPressed(key_up, direction.y < -0.35f);
 	this.setKeyPressed(key_down, direction.y > 0.5f);
 	
 	if (WallJump(this, map, handler, direction, distance)) return;
 
 	if (ClimbWall(this, map, handler, direction, distance)) return;
+	
+	if (JumpOverHole(this, map, handler, direction, distance)) return;
 
 	this.setKeyPressed(key_left, direction.x < -0.5f);
 	this.setKeyPressed(key_right, direction.x > 0.5f);
@@ -592,7 +605,7 @@ void SetSuggestedKeys(CBlob@ this)
 
 bool WallJump(CBlob@ this, CMap@ map, PathHandler@ handler, Vec2f&in direction, Vec2f&in distance)
 {
-	if (direction.y < -0.5f)
+	if (direction.y < -0.35f)
 	{
 		if (handler.path.length <= 1) return false;
 
@@ -609,8 +622,8 @@ bool WallJump(CBlob@ this, CMap@ map, PathHandler@ handler, Vec2f&in direction, 
 	
 	if (moveVars.walljumped_side <= 0) return false;
 
-	const bool left = moveVars.walljumped_side == 1 || moveVars.walljumped_side == 2;
-	const bool right = moveVars.walljumped_side == 3 || moveVars.walljumped_side == 4;
+	const bool left = moveVars.walljumped_side == Walljump::LEFT || moveVars.walljumped_side == Walljump::JUMPED_LEFT;
+	const bool right = moveVars.walljumped_side == Walljump::RIGHT || moveVars.walljumped_side == Walljump::JUMPED_RIGHT;
 	const int sign = left ? 1 : -1;
 	Vec2f end = handler.path[0] + Vec2f(tilesize * 6 * sign, 0);
 
@@ -635,7 +648,7 @@ bool WallJump(CBlob@ this, CMap@ map, PathHandler@ handler, Vec2f&in direction, 
 
 bool ClimbWall(CBlob@ this, CMap@ map, PathHandler@ handler, Vec2f&in direction, Vec2f&in distance)
 {
-	if (direction.y < - 0.5f && Maths::Abs(distance.x) < 4.0f && !this.isOnLadder())
+	if (direction.y < -0.35f && Maths::Abs(distance.x) < 4.0f && !this.isOnLadder())
 	{
 		Vec2f position = this.getPosition();
 		const f32 radius = this.getRadius();
@@ -652,4 +665,72 @@ bool ClimbWall(CBlob@ this, CMap@ map, PathHandler@ handler, Vec2f&in direction,
 		}
 	}
 	return false;
+}
+
+bool JumpOverHole(CBlob@ this, CMap@ map, PathHandler@ handler, Vec2f&in direction, Vec2f&in distance)
+{
+	if (handler.path.length <= 1) return false;
+	
+	if (this.isOnLadder() || this.isInWater()) return false;
+
+	Vec2f depth = Vec2f(0, tilesize * 4);
+	if (handler.path.length > 2 && map.rayCastSolid(handler.path[1], handler.path[1] + depth)) return false;
+	if (map.rayCastSolid(handler.path[0], handler.path[0] + depth)) return false;
+
+	Vec2f path_direction = handler.path[0] - handler.path[1];
+	path_direction.Normalize();
+	if (path_direction.y != 0) return false;
+	
+	Vec2f position = this.getPosition();
+	Vec2f distance_from_waypoint = handler.waypoints[0] - handler.path[0];
+	if (distance_from_waypoint.y > tilesize * 3) return false;
+	
+	this.setKeyPressed(key_up, true);
+	this.setKeyPressed(key_down, false);
+	this.setKeyPressed(key_left, path_direction.x > 0);
+	this.setKeyPressed(key_right, path_direction.x < 0);
+	
+	// Adjust the last path point to the nearest ground for a clean landing
+	const int index = handler.path.length - 1;
+	handler.path[index] = getJumpLanding(handler.path[index], position, handler);
+	
+	// Clear paths that we progress while jumping
+	if (path_direction.x > 0 && position.x < handler.path[0].x ||
+	    path_direction.x < 0 && position.x > handler.path[0].x)
+	{
+		handler.path.erase(0);
+
+		if (handler.path.length == 1)
+		{
+			handler.ProgressPath(position);
+		}
+	}
+
+	return true;
+}
+
+Vec2f getJumpLanding(Vec2f&in tilePos, Vec2f&in position, PathHandler@ handler)
+{
+	if (handler.isGrounded(tilePos) && handler.isWalkable(tilePos, position)) return tilePos;
+
+	Vec2f best_position = tilePos;
+	f32 closest_dist = 99999.0f;
+
+	const int searchRadius = 3;
+	for (int y = -searchRadius; y <= searchRadius; y++)
+	{
+		for (int x = -searchRadius; x <= searchRadius; x++)
+		{
+			Vec2f nodePos = tilePos + Vec2f(x * tilesize, y * tilesize);
+			if (!handler.isGrounded(nodePos) || !handler.isWalkable(nodePos, position)) continue;
+			
+			const f32 dist = (nodePos - tilePos).Length();
+			if (dist < closest_dist)
+			{
+				best_position = nodePos;
+				closest_dist = dist;
+			}
+		}
+	}
+	return best_position;
 }
