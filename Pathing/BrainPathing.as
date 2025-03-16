@@ -376,7 +376,7 @@ class PathHandler
 			LowLevelNode@ currentNode = openList[currentIndex];
 
 			// Check if the target is reached
-			if ((currentNode.position - target).Length() < 16.0f)
+			if ((currentNode.position - target).Length() < 15.0f)
 			{
 				// Reconstruct best path
 				LowLevelNode@ current = currentNode;
@@ -618,7 +618,7 @@ bool WallJump(CBlob@ this, CMap@ map, PathHandler@ handler, Vec2f&in direction, 
 		Vec2f path_direction = handler.path[0] - handler.path[1];
 		path_direction.Normalize();
 
-		if (path_direction != Vec2f(0, 1)) return false;
+		if (path_direction.y <= 0 || path_direction.x != 0) return false;
 	}
 	
 	if (this.isOnLadder() || this.isInWater()) return false;
