@@ -11,7 +11,7 @@ void onSetStatic(CBlob@ this, const bool isStatic)
 
 void UpdateNearbyNodes(CBlob@ this)
 {
-	dictionary@ nodeMap;
+	HighLevelNode@[]@ nodeMap;
 	CRules@ rules = getRules();
 	if (!rules.get("node_map", @nodeMap)) return;
 

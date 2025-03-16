@@ -160,7 +160,7 @@ class PathHandler
 	{
 		waypoints.clear();
 
-		dictionary@ nodeMap;
+		HighLevelNode@[]@ nodeMap;
 		if (!getRules().get("node_map", @nodeMap)) return;
 
 		HighLevelNode@ startNode = getClosestNode(start, nodeMap, flags);
@@ -284,7 +284,7 @@ class PathHandler
 
 	bool canPath(Vec2f&in start, Vec2f&in target, Vec2f&out closestPos)
 	{
-		dictionary@ nodeMap;
+		HighLevelNode@[]@ nodeMap;
 		if (!getRules().get("node_map", @nodeMap)) return false;
 
 		HighLevelNode@ startNode = getClosestNode(start, nodeMap, flags);

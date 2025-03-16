@@ -28,8 +28,12 @@ void onRestart(CRules@ this)
 	}
 }
 
+dictionary visited_nodes;
+
 void onSetTile(CMap@ map, u32 index, TileType newtile, TileType oldtile)
 {
+	if (map.isTileSolid(newtile) && map.isTileSolid(oldtile)) return;
+
 	onMapTileCollapse(map, index);
 }
 
@@ -40,12 +44,27 @@ void onMapFloodLayerUpdate(CMap@ map, s32 index) //STAGING ONLY as of march 6th,
 
 bool onMapTileCollapse(CMap@ map, u32 index)
 {
-	dictionary@ nodeMap;
+	HighLevelNode@[]@ nodeMap;
 	CRules@ rules = getRules();
 	if (!rules.get("node_map", @nodeMap)) return true;
 
 	Vec2f position = map.getTileWorldPosition(index);
-	rules.push("queued_node_updates", getNodesInRadius(position, node_distance * 2.25f, nodeMap));
+	HighLevelNode@[] node_updates;
+	HighLevelNode@[] nodes = getNodesInRadius(position, node_distance * 1.7f, nodeMap); //2.25f
+	for (int i = 0; i < nodes.length; i++)
+	{
+		HighLevelNode@ node = nodes[i];
+		const string node_key = node.original_position.toString();
+		if (visited_nodes.exists(node_key)) continue;
+		
+		visited_nodes.set(node_key, true);
+		node_updates.push_back(node);
+	}
+
+	if (node_updates.length != 0)
+	{
+		rules.push("queued_node_updates", node_updates);
+	}
 	
 	return true;
 }
@@ -56,6 +75,8 @@ void onTick(CRules@ this)
 	if (!this.get("queued_node_updates", @queued_node_updates)) return;
 
 	if (queued_node_updates.length == 0) return;
+	
+	visited_nodes.deleteAll();
 	
 	const int index = queued_node_updates.length - 1;
 	HighLevelNode@[] node_update = queued_node_updates[index];
@@ -77,18 +98,18 @@ void onTick(CRules@ this)
 
 void InitializeNodeMap(CRules@ this)
 {
-	dictionary nodeMap;
+	HighLevelNode@[] nodeMap;
 	this.set("node_map", @nodeMap);
 
 	CMap@ map = getMap();
 	Vec2f dim = map.getMapDimensions();
 
-	Vec2f[] node_directions = { Vec2f(-node_distance, 0), Vec2f(0, -node_distance) };
+	const Vec2f[] node_directions = { Vec2f(-node_distance, 0), Vec2f(0, -node_distance) };
 
 	HighLevelNode@[] node_update;
-	for (u32 x = node_distance; x < dim.x; x += node_distance)
+	for (u32 y = node_distance; y < dim.y; y += node_distance)
 	{
-		for (u32 y = node_distance; y < dim.y; y += node_distance)
+		for (u32 x = node_distance; x < dim.x; x += node_distance)
 		{
 			Vec2f nodepos = Vec2f(x, y);
 			HighLevelNode@ node = HighLevelNode(nodepos);
@@ -97,19 +118,18 @@ void InitializeNodeMap(CRules@ this)
 			{
 				Vec2f neighborPos = nodepos + node_directions[i];
 
-				HighLevelNode@ neighborNode;
-				if (nodeMap.get(neighborPos.toString(), @neighborNode))
-				{
-					// Connect the new node to the neighbor and vice versa
-					node.connections.push_back(@neighborNode);
-					neighborNode.connections.push_back(@node);
-					
-					node.original_connections.push_back(@neighborNode);
-					neighborNode.original_connections.push_back(@node);
-				}
+				HighLevelNode@ neighborNode = getNodeFromPosition(neighborPos, nodeMap, map);
+				if (neighborNode is null) continue;
+
+				// Connect the new node to the neighbor and vice versa
+				node.connections.push_back(@neighborNode);
+				neighborNode.connections.push_back(@node);
+				
+				node.original_connections.push_back(@neighborNode);
+				neighborNode.original_connections.push_back(@node);
 			}
 
-			nodeMap.set(node.position.toString(), @node);
+			nodeMap.push_back(node);
 			node_update.push_back(node);
 		}
 	}
@@ -123,16 +143,16 @@ void UpdateNodeConnections(HighLevelNode@ node, CMap@ map)
 	for (int i = node.connections.length - 1; i >= 0; i--)
 	{
 		HighLevelNode@ neighbor = node.connections[i];
-
 		if (neighbor.hasFlag(Path::DISABLED) || !canNodesConnect(node, neighbor, map))
 		{
 			node.connections.erase(i);
 
 			for (int n = neighbor.connections.length - 1; n >= 0; n--)
 			{
-				if (neighbor.connections[n].original_position != node.original_position) continue;
+				if (neighbor.connections[n] !is node) continue;
 
 				neighbor.connections.erase(n);
+				break;
 			}
 		}
 	}
@@ -149,10 +169,9 @@ void UpdateNodePosition(HighLevelNode@ node, CMap@ map)
 		node.flags |= Path::GROUND;
 		return;
 	}
-	
-	Vec2f dim = map.getMapDimensions();
 
 	// Look for the nearest walkable tile in a small radius
+	Vec2f dim = map.getMapDimensions();
 	const u8 searchRadius = 3;
 	Vec2f closestPos = node.original_position;
 	f32 closestDistance = 999999.0f;
@@ -161,8 +180,9 @@ void UpdateNodePosition(HighLevelNode@ node, CMap@ map)
 	{
 		for (int x = -searchRadius; x <= searchRadius; x++)
 		{
-			Vec2f neighborPos = node.original_position + Vec2f(x * tilesize, y * tilesize);
+			if (x == 0 && y == 0) continue;
 
+			Vec2f neighborPos = node.original_position + Vec2f(x * tilesize, y * tilesize);
 			if (isWalkable(neighborPos, map) && isSupported(neighborPos, map) && isInMap(neighborPos, dim))
 			{
 				const f32 distance = (neighborPos - node.original_position).LengthSquared();
@@ -232,45 +252,53 @@ bool isInMap(Vec2f&in tilePos, Vec2f&in dim)
 bool canNodesConnect(HighLevelNode@ node, HighLevelNode@ neighbor, CMap@ map)
 {
 	Vec2f start = node.position;
-	Vec2f end = neighbor.position;
+	Vec2f target = neighbor.position;
 	const bool air = node.hasFlag(Path::AERIAL) || neighbor.hasFlag(Path::AERIAL);
-	if ((start - end).Length() > node_distance * 1.7f && !air) return false;
-
-	if (!isWalkable(start, map)) return false;
-
-	Vec2f minBound = Vec2f(Maths::Min(start.x, end.x) - tilesize * 2, Maths::Min(start.y, end.y) - tilesize * 2);
-	Vec2f maxBound = Vec2f(Maths::Max(start.x, end.x) + tilesize * 2, Maths::Max(start.y, end.y) + tilesize * 2);
-
-	Vec2f[] openList;
+	if ((start - target).LengthSquared() > Maths::Pow(node_distance * 1.7f, 2) && !air) return false;
+	
+	Vec2f minBound = Vec2f(Maths::Min(start.x, target.x) - tilesize * 2, Maths::Min(start.y, target.y) - tilesize * 2);
+	Vec2f maxBound = Vec2f(Maths::Max(start.x, target.x) + tilesize * 2, Maths::Max(start.y, target.y) + tilesize * 2);
+	LowLevelNode@[] openList;
+	dictionary openSet;
 	dictionary closedList;
+	openSet.set(start.toString(), true);
+	openList.push_back(LowLevelNode(start, 0, (start - target).LengthSquared(), null));
 
-	openList.push_back(start);
-
-	while (!openList.isEmpty())
+	while (openList.length > 0)
 	{
-		Vec2f current = openList[0];
-		openList.removeAt(0);
+		int currentIndex = 0;
+		for (int i = 1; i < openList.length; i++)
+		{
+			if (openList[i].hCost < openList[currentIndex].hCost)
+			{
+				currentIndex = i;
+			}
+		}
 
-		if (current == end) return true;
+		LowLevelNode@ currentNode = openList[currentIndex];
+		if ((currentNode.position - target).LengthSquared() <= 64.0f) return true;
 
-		const string nodeKey = current.toString();
-		if (closedList.exists(nodeKey)) continue;
-
-		closedList.set(nodeKey, true);
+		openList.removeAt(currentIndex);
+		openSet.delete(currentNode.position.toString());
+		closedList.set(currentNode.position.toString(), @currentNode);
 
 		for (u8 i = 0; i < 4; i++)
 		{
-			Vec2f neighbor = current + cardinalDirections[i];
+			Vec2f neighborPos = currentNode.position + cardinalDirections[i];
+			if (closedList.exists(neighborPos.toString())) continue;
 
-			if (neighbor.x >= minBound.x && neighbor.y >= minBound.y &&
-				neighbor.x <= maxBound.x && neighbor.y <= maxBound.y &&
-				!closedList.exists(neighbor.toString()) && isWalkable(neighbor, map))
+			if (neighborPos.x < minBound.x || neighborPos.y < minBound.y || neighborPos.x > maxBound.x || neighborPos.y > maxBound.y) continue;
+
+			if (!isWalkable(neighborPos, map)) continue;
+			
+			if (!openSet.exists(neighborPos.toString()))
 			{
-				openList.push_back(neighbor);
+				openList.push_back(LowLevelNode(neighborPos, 0, (neighborPos - target).LengthSquared(), currentNode));
+				openSet.set(neighborPos.toString(), true);
 			}
 		}
 	}
-
+	
 	return false;
 }
 
@@ -278,7 +306,7 @@ void onRender(CRules@ this)
 {
 	if ((!render_paths && g_debug == 0) || g_debug == 5) return;
 	
-	dictionary@ nodeMap;
+	HighLevelNode@[]@ nodeMap;
 	if (!this.get("node_map", @nodeMap)) return;
 
 	SColor nodeColor(255, 0, 255, 0);
@@ -290,11 +318,10 @@ void onRender(CRules@ this)
 	
 	const u8 render_blacklist = Path::DISABLED | Path::AERIAL; //stops these types of path from rendering
 
-	const string[]@ node_keys = nodeMap.getKeys();
-	for (u32 i = 0; i < node_keys.length; i++)
+	for (u32 i = 0; i < nodeMap.length; i++)
 	{
-		HighLevelNode@ node;
-		if (!nodeMap.get(node_keys[i], @node) || node.hasFlag(render_blacklist)) continue;
+		HighLevelNode@ node = nodeMap[i];
+		if (node is null || node.hasFlag(render_blacklist)) continue;
 
 		Vec2f pos = driver.getScreenPosFromWorldPos(node.position);
 		if ((pos - center).Length() > screen_dim.x) continue;
