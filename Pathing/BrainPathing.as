@@ -1,4 +1,4 @@
-// Gingerbeard @ January 13th - 23th, 2025
+// Gingerbeard @ January 13th, 2025
 // A* Pathfinding Implementation for King Arthur's Gold
 
 #include "PathingNodesCommon.as";
@@ -100,14 +100,18 @@ class PathHandler
 		if (waypoints.length > 0)
 		{
 			SetLowLevelPath(position, waypoints[0]);
-
-			// Cache the next waypoint as a potential 'stuck' node
-			waypoint_key = waypoints[0].toString();
-			if (!cached_waypoints.exists(waypoint_key))
-			{
-				CachedWaypoint@ cached = CachedWaypoint(waypoints[0]);
-				cached_waypoints.set(waypoint_key, cached);
-			}
+			CacheWaypoint(waypoints[0]);
+		}
+	}
+	
+	void CacheWaypoint(Vec2f&in waypoint)
+	{
+		// Cache the waypoint as a potential 'stuck' node
+		const string waypoint_key = waypoint.toString();
+		if (!cached_waypoints.exists(waypoint_key))
+		{
+			CachedWaypoint@ cached = CachedWaypoint(waypoint);
+			cached_waypoints.set(waypoint_key, cached);
 		}
 	}
 	
@@ -117,6 +121,7 @@ class PathHandler
 		SetHighLevelPath(start, target);
 		if (waypoints.length > 0)
 		{
+			CacheWaypoint(waypoints[0]);
 			SetLowLevelPath(start, waypoints[0]);
 		}
 	}
@@ -516,6 +521,7 @@ class CachedWaypoint
 	{
 		position = pos;
 		time = 1;
+		stuck = false;
 	}
 }
 
