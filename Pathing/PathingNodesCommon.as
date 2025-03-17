@@ -83,7 +83,7 @@ HighLevelNode@ getClosestNode(Vec2f&in position, HighLevelNode@[]@ nodeMap, cons
 
 	while (currentRadius <= maxSearchRadius)
 	{
-		HighLevelNode@[] nodes = getNodesInRadius(position, currentRadius, nodeMap);
+		HighLevelNode@[] nodes = getNodesInRadius(position, currentRadius, nodeMap, flags);
 		f32 closestDistance = 999999.0f;
 		HighLevelNode@ closestNode = null;
 
@@ -91,7 +91,7 @@ HighLevelNode@ getClosestNode(Vec2f&in position, HighLevelNode@[]@ nodeMap, cons
 		{
 			HighLevelNode@ node = nodes[i];
 			const f32 distance = (node.position - position).Length();
-			if (distance < closestDistance && node.hasFlag(flags))
+			if (distance < closestDistance)
 			{
 				@closestNode = node;
 				closestDistance = distance;
@@ -106,7 +106,7 @@ HighLevelNode@ getClosestNode(Vec2f&in position, HighLevelNode@[]@ nodeMap, cons
 	return null;
 }
 
-HighLevelNode@[] getNodesInRadius(Vec2f&in position, const f32&in radius, HighLevelNode@[]@ nodeMap)
+HighLevelNode@[] getNodesInRadius(Vec2f&in position, const f32&in radius, HighLevelNode@[]@ nodeMap, const int flags = -1)
 {
 	CMap@ map = getMap();
 	HighLevelNode@[] nodes;
@@ -123,6 +123,8 @@ HighLevelNode@[] getNodesInRadius(Vec2f&in position, const f32&in radius, HighLe
 
 			HighLevelNode@ node = getNodeFromPosition(nodePos, nodeMap, map);
 			if (node is null) continue;
+
+			if (flags != -1 && !node.hasFlag(flags)) continue;
 
 			nodes.push_back(node);
 		}
