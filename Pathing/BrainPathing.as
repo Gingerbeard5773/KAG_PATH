@@ -33,6 +33,7 @@ class PathHandler
 	Vec2f destination;           // Target destination
 	u8 team;                     // Decides what doors we can pass through
 	u8 flags;                    // Decides what paths to use
+	u8 variance;                 // Max amount of random cost we give to each high level node
 	f32 reach_low_level;         // What distance we can 'reach' low level path nodes
 	f32 reach_high_level;        // What distance we can 'reach' high level waypoints
 	
@@ -43,6 +44,7 @@ class PathHandler
 		
 		reach_low_level = 10.0f;
 		reach_high_level = 20.0f;
+		variance = 50;
 	}
 	
 	void Tick(Vec2f&in position)
@@ -236,9 +238,10 @@ class PathHandler
 
 				if ((neighbor.position - startNode.position).Length() > maximum_pathing_distance_high_level) continue;
 
-				const f32 underwaterPenalty = isUnderwater(currentNode.position) ? 60 : 0;
-				const f32 groundPenalty = isGrounded(neighbor.position) ? 0 : 40;
-				const f32 tentativeGCost = currentNode.gCost + underwaterPenalty + + groundPenalty + euclidean(currentNode.position, neighbor.position);
+				const f32 waterCost = isUnderwater(currentNode.position) ? 60 : 0;
+				const f32 groundCost = isGrounded(neighbor.position) ? 0 : 40;
+				const f32 randomCost = XORRandom(variance);
+				const f32 tentativeGCost = currentNode.gCost + waterCost + groundCost + randomCost + euclidean(currentNode.position, neighbor.position);
 
 				// Check if the neighbor is not in the open list or if a better path is found
 				const bool isEvaluated = isInOpenList(neighbor, openList);
