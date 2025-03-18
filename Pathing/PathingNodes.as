@@ -220,10 +220,12 @@ bool isWalkable(Vec2f&in tilePos, CMap@ map)
 
 bool isSupported(Vec2f&in tilePos, CMap@ map)
 {
+	Vec2f dim = map.getMapDimensions();
 	for (u8 i = 0; i < 4; i++)
 	{
 		// Are we adjacent to solid tiles
-		if (map.isTileSolid(tilePos + cardinalDirections[i] * 1.5f)) return true;
+		Vec2f checkPos = tilePos + cardinalDirections[i] * 1.5;
+		if (checkPos.x < dim.x && map.isTileSolid(checkPos)) return true;
 	}
 
 	if (map.isInWater(tilePos + Vec2f(0, tilesize))) return true;
