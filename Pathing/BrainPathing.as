@@ -285,7 +285,7 @@ class PathHandler
 		return false;
 	}
 
-	bool canPath(Vec2f&in start, Vec2f&in target, Vec2f&out closestPos)
+	bool canPath(Vec2f&in start, Vec2f&in target)
 	{
 		HighLevelNode@[]@ nodeMap;
 		if (!getRules().get("node_map", @nodeMap)) return false;
@@ -295,7 +295,7 @@ class PathHandler
 		if (startNode is null || targetNode is null) return false;
 		
 		f32 progressThreshold = euclidean(startNode.position, targetNode.position);
-		closestPos = startNode.position;
+		Vec2f closestPos = startNode.position;
 
 		dictionary closedList;
 		HighLevelNode@[] openList;
@@ -317,10 +317,10 @@ class PathHandler
 			}
 
 			HighLevelNode@ currentNode = openList[bestIndex];
+			if (currentNode is targetNode) return true;
+
 			openList.removeAt(bestIndex);
 			closedList.set(currentNode.original_position.toString(), true);
-
-			if (currentNode is targetNode) return true;
 			
 			if (bestDistance < progressThreshold)
 			{
@@ -332,6 +332,8 @@ class PathHandler
 			{
 				HighLevelNode@ neighbor = currentNode.connections[i];
 				if (closedList.exists(neighbor.original_position.toString())) continue;
+
+				if (!neighbor.hasFlag(flags)) continue;
 
 				if ((neighbor.position - closestPos).Length() > maximum_pathing_distance_high_level) return false;
 
