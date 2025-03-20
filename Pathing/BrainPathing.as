@@ -692,6 +692,8 @@ bool JumpOverHole(CBlob@ this, CMap@ map, PathHandler@ handler, Vec2f&in directi
 	path_direction.Normalize();
 	if (path_direction.y != 0) return false;
 	
+	if (handler.waypoints.length <= 0) return false;
+
 	Vec2f position = this.getPosition();
 	Vec2f distance_from_waypoint = handler.waypoints[0] - handler.path[0];
 	if (distance_from_waypoint.y > tilesize * 3) return false;
