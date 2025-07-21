@@ -17,28 +17,28 @@ void onInit(CBrain@ this)
 	this.server_SetActive(true);
 
 	CBlob@ blob = this.getBlob();
-	PathHandler handler(blob.getTeamNum(), Path::GROUND);
-	blob.set("path_handler", @handler);
+	BrainPath pather(blob, Path::GROUND);
+	blob.set("brain_path", @pather);
 }
 
 void onTick(CBrain@ this)
 {
 	CBlob@ blob = this.getBlob();
 
-	PathHandler@ handler;
-	if (!blob.get("path_handler", @handler)) return;
+	BrainPath@ pather;
+	if (!blob.get("brain_path", @pather)) return;
 
 	if (blob.getPlayer() !is null && !blob.isBot())
 	{
-		handler.EndPath();
+		pather.EndPath();
 		this.server_SetActive(false);
 		return;
 	}
 
-	handler.Tick(blob.getPosition());
+	pather.Tick();
 
-	SetSuggestedKeys(blob);
-	SetSuggestedFacing(blob);
+	pather.SetSuggestedKeys();
+	pather.SetSuggestedAimPos();
 
 	CBlob@ target = this.getTarget();
 	if (target is null || XORRandom(20) == 0)
@@ -64,7 +64,7 @@ void onTick(CBrain@ this)
 		}
 		else if (strategy == Strategy::chasing && (getGameTime() + blob.getNetworkID() * 10) % 20 == 0)
 		{
-			SetPath(blob, target.getPosition());
+			pather.SetPath(blob.getPosition(), target.getPosition());
 		}
 		else if (strategy == Strategy::attacking)
 		{
@@ -80,7 +80,7 @@ void onTick(CBrain@ this)
 		}*/
 		if (strategy == Strategy::attacking)
 		{
-			EndPath(blob);
+			pather.EndPath();
 			AttackBlob(blob, target);
 		}
 
@@ -88,7 +88,7 @@ void onTick(CBrain@ this)
 
 		if (LoseTarget(this, target))
 		{
-			EndPath(blob);
+			pather.EndPath();
 			strategy = Strategy::idle;
 		}
 
@@ -97,21 +97,12 @@ void onTick(CBrain@ this)
 	else if (strategy == Strategy::idle)
 	{
 		// wander around the map
-		if (handler.destination == Vec2f_zero)
+		if (!pather.isPathing())
 		{
 			CMap@ map = getMap();
 			Vec2f dim = map.getMapDimensions();
-			SetPath(blob, Vec2f(XORRandom(dim.x), XORRandom(dim.y)));
+			pather.SetPath(blob.getPosition(), Vec2f(XORRandom(dim.x), XORRandom(dim.y)));
 		}
-		/*else if ((getGameTime() + blob.getNetworkID() * 10) % 30 == 0)
-		{
-			handler.Repath(blob.getPosition());
-		}*/
-	}
-
-	if (handler.destination == Vec2f_zero)
-	{
-		FloatInWater(blob);
 	}
 }
 
@@ -218,62 +209,13 @@ CBlob@ getNewTarget(CBlob@ blob)
 
 void onRender(CSprite@ this)
 {
-	if (!render_paths) return;
+	if ((!render_paths && g_debug == 0) || g_debug == 5) return;
 
 	CBlob@ blob = this.getBlob();
 	if (blob.hasTag("dead")) return;
 
-	PathHandler@ handler;
-	if (!blob.get("path_handler", @handler)) return;
+	BrainPath@ pather;
+	if (!blob.get("brain_path", @pather)) return;
 
-	const SColor col(0xff66C6FF);
-	Driver@ driver = getDriver();
-	
-	// Draw low-level boundary
-	//GUI::DrawCircle(blob.getScreenPos(), tilesize * 15 * 2 * getCamera().targetDistance, col);
-	
-	// Draw high-level boundary
-	//GUI::DrawCircle(blob.getScreenPos(), tilesize * 70 * 2 * getCamera().targetDistance, ConsoleColour::ERROR);
-
-	// Draw target position
-	/*if (handler.destination != Vec2f_zero)
-	{
-		Vec2f destination = driver.getScreenPosFromWorldPos(handler.destination);
-		GUI::DrawCircle(destination, 16.0f, ConsoleColour::ERROR);
-	}*/
-
-	// Draw low-level path
-	for (int i = 1; i < handler.path.length; i++)
-	{
-		Vec2f current = driver.getScreenPosFromWorldPos(handler.path[i]);
-		Vec2f previous = driver.getScreenPosFromWorldPos(handler.path[i - 1]);
-		GUI::DrawArrow2D(previous, current, col);
-	}
-	
-	// Draw stuck nodes
-	const string[]@ cached_keys = handler.cached_waypoints.getKeys();
-	for (int i = 0; i < cached_keys.length; i++)
-	{
-		CachedWaypoint@ cached_waypoint;
-		if (!handler.cached_waypoints.get(cached_keys[i], @cached_waypoint)) continue;
-		
-		if (handler.waypoints.length > 0 && handler.waypoints[0] == cached_waypoint.position) continue;
-
-		Vec2f stuck_waypoint = driver.getScreenPosFromWorldPos(cached_waypoint.position);
-		GUI::DrawCircle(stuck_waypoint, 10.0f, cached_waypoint.stuck ? ConsoleColour::CRAZY : ConsoleColour::WARNING);
-	}
-	
-	if (handler.waypoints.length > 0)
-	{
-		// Draw high level path
-		/*for (int i = 1; i < handler.waypoints.length; i++)
-		{
-			Vec2f waypoint = driver.getScreenPosFromWorldPos(handler.waypoints[i]);
-			GUI::DrawCircle(waypoint, 9.0f, ConsoleColour::RCON);
-		}*/
-
-		// Draw current waypoint goal
-		Vec2f next_waypoint = driver.getScreenPosFromWorldPos(handler.waypoints[0]);
-		GUI::DrawCircle(next_waypoint, 8.0f, col);
-	}
+	pather.Render();
 }

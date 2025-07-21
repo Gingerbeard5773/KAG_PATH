@@ -163,14 +163,14 @@ void UpdateNodePosition(HighLevelNode@ node, CMap@ map)
 	node.position = node.original_position;
 	node.flags = 0;
 
-	const bool walkable = isWalkable(node.original_position, map);
-	if (walkable && isSupported(node.original_position, map))
+	const bool passable = isPassable(node.original_position, map);
+	if (passable && isSupported(node.original_position, map))
 	{
 		node.flags |= Path::GROUND;
 		return;
 	}
 
-	// Look for the nearest walkable tile in a small radius
+	// Look for the nearest passable area in a small radius
 	Vec2f dim = map.getMapDimensions();
 	const u8 searchRadius = 3;
 	Vec2f closestPos = node.original_position;
@@ -183,7 +183,7 @@ void UpdateNodePosition(HighLevelNode@ node, CMap@ map)
 			if (x == 0 && y == 0) continue;
 
 			Vec2f neighborPos = node.original_position + Vec2f(x * tilesize, y * tilesize);
-			if (isWalkable(neighborPos, map) && isSupported(neighborPos, map) && isInMap(neighborPos, dim))
+			if (isPassable(neighborPos, map) && isSupported(neighborPos, map) && isInMap(neighborPos, dim))
 			{
 				const f32 distance = (neighborPos - node.original_position).LengthSquared();
 				if (distance < closestDistance)
@@ -195,10 +195,10 @@ void UpdateNodePosition(HighLevelNode@ node, CMap@ map)
 		}
 	}
 
-	// If no walkable tile is found, mark the node as disabled
+	// If no passable area is found, mark the node as disabled
 	if (closestDistance == 999999.0f)
 	{
-		if (walkable)
+		if (passable)
 			node.flags |= Path::AERIAL;
 		else
 			node.flags = Path::DISABLED;
@@ -207,15 +207,6 @@ void UpdateNodePosition(HighLevelNode@ node, CMap@ map)
 
 	node.position = closestPos;
 	node.flags |= Path::GROUND;
-}
-
-bool isWalkable(Vec2f&in tilePos, CMap@ map)
-{
-	for (u8 i = 0; i < 4; i++)
-	{
-		if (map.isTileSolid(tilePos + walkableDirections[i])) return false;
-	}
-	return true;
 }
 
 bool isSupported(Vec2f&in tilePos, CMap@ map)
@@ -237,9 +228,28 @@ bool isSupported(Vec2f&in tilePos, CMap@ map)
 		for (int i = 0; i < blobs.length; i++)
 		{
 			CBlob@ b = blobs[i];
-			if (b.getShape().getVars().isladder) return true;
-			
-			//if (b.isPlatform()) return true;
+			CShape@ shape = b.getShape();
+			if (!shape.isStatic()) continue;
+
+			if (shape.getVars().isladder) return true;
+
+			// Check for adjacent tile-blobs
+			if (shape.getConsts().collidable && (b.getPosition() - tilePos).Length() < 13.0f)
+			{
+				if (b.isPlatform())
+				{
+					ShapePlatformDirection@ plat = b.getShape().getPlatformDirection(0);
+					Vec2f dir = plat.direction;
+					if (!plat.ignore_rotations) dir.RotateBy(b.getAngleDegrees());
+					if (Maths::Abs(dir.AngleWith(b.getPosition() - tilePos)) > plat.angleLimit)
+					{
+						return true;
+					}
+					continue;
+				}
+
+				return true;
+			}
 		}
 	}
 
@@ -249,59 +259,6 @@ bool isSupported(Vec2f&in tilePos, CMap@ map)
 bool isInMap(Vec2f&in tilePos, Vec2f&in dim)
 {
 	return tilePos.x > 0 && tilePos.y > 0 && tilePos.x < dim.x && tilePos.y < dim.y;
-}
-
-bool canNodesConnect(HighLevelNode@ node, HighLevelNode@ neighbor, CMap@ map)
-{
-	Vec2f start = node.position;
-	Vec2f target = neighbor.position;
-	const bool air = node.hasFlag(Path::AERIAL) || neighbor.hasFlag(Path::AERIAL);
-	if ((start - target).LengthSquared() > Maths::Pow(node_distance * 1.7f, 2) && !air) return false;
-	
-	Vec2f minBound = Vec2f(Maths::Min(start.x, target.x) - tilesize * 2, Maths::Min(start.y, target.y) - tilesize * 2);
-	Vec2f maxBound = Vec2f(Maths::Max(start.x, target.x) + tilesize * 2, Maths::Max(start.y, target.y) + tilesize * 2);
-	LowLevelNode@[] openList;
-	dictionary openSet;
-	dictionary closedList;
-	openSet.set(start.toString(), true);
-	openList.push_back(LowLevelNode(start, 0, (start - target).LengthSquared(), null));
-
-	while (openList.length > 0)
-	{
-		int currentIndex = 0;
-		for (int i = 1; i < openList.length; i++)
-		{
-			if (openList[i].hCost < openList[currentIndex].hCost)
-			{
-				currentIndex = i;
-			}
-		}
-
-		LowLevelNode@ currentNode = openList[currentIndex];
-		if ((currentNode.position - target).LengthSquared() <= 64.0f) return true;
-
-		openList.removeAt(currentIndex);
-		openSet.delete(currentNode.position.toString());
-		closedList.set(currentNode.position.toString(), @currentNode);
-
-		for (u8 i = 0; i < 4; i++)
-		{
-			Vec2f neighborPos = currentNode.position + cardinalDirections[i];
-			if (closedList.exists(neighborPos.toString())) continue;
-
-			if (neighborPos.x < minBound.x || neighborPos.y < minBound.y || neighborPos.x > maxBound.x || neighborPos.y > maxBound.y) continue;
-
-			if (!isWalkable(neighborPos, map)) continue;
-			
-			if (!openSet.exists(neighborPos.toString()))
-			{
-				openList.push_back(LowLevelNode(neighborPos, 0, (neighborPos - target).LengthSquared(), currentNode));
-				openSet.set(neighborPos.toString(), true);
-			}
-		}
-	}
-	
-	return false;
 }
 
 void onRender(CRules@ this)
