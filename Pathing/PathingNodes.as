@@ -236,6 +236,8 @@ bool isSupported(Vec2f&in tilePos, CMap@ map)
 			// Check for adjacent tile-blobs
 			if (shape.getConsts().collidable && (b.getPosition() - tilePos).Length() < 13.0f)
 			{
+				if (b.getName() == "lantern" || b.getName() == "mounted_bow") continue;
+
 				if (b.isPlatform())
 				{
 					ShapePlatformDirection@ plat = b.getShape().getPlatformDirection(0);
